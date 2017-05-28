@@ -76,7 +76,7 @@ sub print_monitors {
     my $gpu_id = 0;
     for my $gpu_data (@{$data}) {
         for my $field_name (sort keys %{$gpu_data}) {
-			printf "%s%d\t%s\n", $field_name, $gpu_id, 'integer';
+            printf "%s%d\t%s\n", $field_name, $gpu_id, 'integer';
         }
         $gpu_id++;
     }
