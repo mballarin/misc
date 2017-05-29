@@ -103,19 +103,16 @@ my $RE_INPUT      = qr/^ ([\w.]+?) (\d+) (\?)? $/x;
 # set to its return value.
 # - If max is a scalar, the fields maximum will be set to this value.
 # - If unit is a scalar, the auto-detected unit will be overriden by this value
+# - If type is a scalar, this value will be used instead of integer.
 my %QUERIED_FIELDS = (
     'clocks.current.graphics' => {
         max => sub { $_[0]->{'clocks.max.graphics'} }
     },
     'clocks.current.memory' => {
-        max => sub {
-            $_[0]->{'clocks.max.memory'};
-          }
+        max => sub { $_[0]->{'clocks.max.memory'} }
     },
     'clocks.current.sm' => {
-        max => sub {
-            $_[0]->{'clocks.max.sm'};
-          }
+        max => sub { $_[0]->{'clocks.max.sm'} }
     },
     'clocks.current.video' => {},
     'clocks.max.graphics'  => {},
@@ -135,27 +132,20 @@ my %QUERIED_FIELDS = (
       { max => 1, transform => \&map_bool },
     'fan.speed'                       => {},
     'memory.used'                     => {
-        max => sub {
-            $_[0]->{'memory.total'};
-          }
+        max => sub { $_[0]->{'memory.total'} }
     },
     'memory.total'          => {},
     'pcie.link.gen.current' => {
-        max => sub {
-            $_[0]->{'pcie.link.gen.max'};
-          }
+        max => sub { $_[0]->{'pcie.link.gen.max'} }
     },
     'pcie.link.gen.max'       => {},
     'pcie.link.width.current' => {
-        max => sub {
-            $_[0]->{'pcie.link.width.max'};
-          }
+        max => sub { $_[0]->{'pcie.link.width.max'} }
     },
     'pcie.link.width.max' => {},
     'power.draw'          => {
-        max => sub {
-            $_[0]->{'power.limit'};
-          }
+        max  => sub { $_[0]->{'power.limit'} },
+        type => 'float',
     },
     'power.limit' => {},
     'pstate'      => {
@@ -170,15 +160,19 @@ my %QUERIED_FIELDS = (
     'utilization.gpu' => {},
 );
 
+# auto-detected units are stored here
+my %UNITS;
+
 sub trim {
     my $string = shift;
 
+    return unless defined $string;
     $string =~ s/^\s+|\s+$//xg;
     return $string;
 }
 
-# maps boolean values returned by nvidia-smi to something that is true
-# or false in Perl
+# maps boolean values returned by nvidia-smi to something 
+# that is true or false in Perl
 sub map_bool {
     my ($string) = @_;
 
@@ -215,44 +209,60 @@ sub collect_data_real {
         '--query-gpu=' . join(',', keys %QUERIED_FIELDS));
     waitpid($pid, 0);
 
-    # the following would be much saner and readable with CPAN modules
-    # (Text::CSV, List::MoreUtils). But I want to avoid non-core dependencies.
-    my (@gpus, @headers);
+    # the following would be much saner and readable with CPAN modules.
+    # But I want to avoid non-core dependencies.
+    my (@gpus, $headers);
     while (<$out>) {
         chomp;
-        if (scalar @headers) {
-            my %gpu_data;
-            my @values = split /,/x, $_;
-            for my $i (0 .. $#headers) {
-                $gpu_data{ $headers[$i] } =
-                  transform_value($values[$i], $headers[$i]);
-            }
-            push @gpus, \%gpu_data;
+        my $columns = [ split /,/x, $_ ];
+        if (defined $headers) {
+            push @gpus, parse_data($columns, $headers);
         } else {
-            for my $field (split /,/x, $_) {
-                if ($field =~ /^(.+?)(?:\[(.+)\])?$/x) {
-                    my $header = trim($1);
-                    $QUERIED_FIELDS{$header}->{unit} //= trim($2 // '');
-                    push @headers, $header;
-                } else {
-                    die "unparsable header: '$field'\n";
-                }
-            }
+            $headers = parse_headers($columns);
         }
     }
-    return @gpus;
+    return \@gpus;
+}
+
+sub parse_data {
+    my ($columns, $headers) = @_;
+    
+    my %gpu_data;
+    my $pos = 0;
+    for my $h (@{$headers}) {
+        $gpu_data{$h} = transform_value($columns->[$pos++], $h);
+    }
+    return \%gpu_data;
+}
+
+sub parse_headers {
+    my ($columns) = @_;
+
+    # header name, followed by optional unit in []
+    my $re_header = qr/^(.+?) (?: \[ (.+) \] )?$/x;
+    my @headers;
+    for my $field (@{$columns}) {
+        if ($field =~ $re_header) {
+            my $header = trim($1);
+            $UNITS{$header} = $QUERIED_FIELDS{$header}->{unit} // trim($2);
+            push @headers, $header;
+        } else {
+            die "unparsable header: '$field'\n";
+        }
+    }
+    return \@headers;
 }
 
 {
-    my @data;
+    my $data;
     my $last_checked = 0;
 
     sub collect_data {
         if ($last_checked < time() - $CACHE_SECONDS) {
             $last_checked = time();
-            @data         = collect_data_real();
+            $data         = collect_data_real();
         }
-        return \@data;
+        return $data;
     }
 }
 
@@ -262,7 +272,10 @@ sub print_monitors {
     my $gpu_id = 0;
     for my $gpu_data (@{$data}) {
         for my $field_name (sort keys %{$gpu_data}) {
-            printf "%s%d\t%s\n", $field_name, $gpu_id, 'integer';
+            printf(
+                "%s%d\t%s\n", $field_name, $gpu_id, 
+                $QUERIED_FIELDS{$field_name}->{type} // 'integer',
+            );
         }
         $gpu_id++;
     }
@@ -277,7 +290,7 @@ sub print_field_on_gpu {
             printf("%s\t0\t%d\t%s\n",
                 $field_name,
                 get_max($field_name, $gpu_data),
-                $QUERIED_FIELDS{$field_name}->{unit},
+                $UNITS{$field_name} // '',
             );
         } else {
             print "$gpu_data->{$field_name}\n";
