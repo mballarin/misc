@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE KSysGuardWorkSheet>
+<WorkSheet columns="5" title="Nvidia" interval="2" locked="0" rows="4">
+ <host command="perl /usr/local/bin/ksysguard-nvidia-smi.pl" shell="" name="nvidia-smi" port="-1"/>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="0" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="0" columnSpan="1" vDistance="30" title="clocks.current.graphics0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="clocks.current.graphics0" color="0xff0057ae"/>
+ </display>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="1" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="0" columnSpan="1" vDistance="30" title="clocks.current.sm0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="clocks.current.sm0" color="0xff0057ae"/>
+ </display>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="2" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="0" columnSpan="1" vDistance="30" title="clocks.current.video0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="clocks.current.video0" color="0xff0057ae"/>
+ </display>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="3" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="0" columnSpan="1" vDistance="30" title="clocks.current.memory0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="clocks.current.memory0" color="0xff0057ae"/>
+ </display>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="4" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="0" columnSpan="1" vDistance="30" title="utilization.gpu0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="utilization.gpu0" color="0xff0057ae"/>
+ </display>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="0" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="2" columnSpan="1" vDistance="30" title="fan.speed0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="fan.speed0" color="0xff0057ae"/>
+ </display>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="1" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="2" columnSpan="1" vDistance="30" title="memory.used0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="memory.used0" color="0xff0057ae"/>
+ </display>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="2" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="2" columnSpan="1" vDistance="30" title="power.draw0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="power.draw0" color="0xff0057ae"/>
+ </display>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="3" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="2" columnSpan="1" vDistance="30" title="pstate0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="pstate0" color="0xff0057ae"/>
+ </display>
+ <display stacked="0" svgBackground="" manualRange="0" vScroll="0" column="4" showUnit="0" class="FancyPlotter" labels="1" version="1" hLines="1" hScale="6" row="2" columnSpan="1" vDistance="30" title="temperature.gpu0" autoRange="1" vLines="0" rowSpan="1" unit="" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorName="temperature.gpu0" color="0xff0057ae"/>
+ </display>
+ <display lowerLimit="0" column="0" mAlarmDigitColor="0xffff0000" hostName="nvidia-smi" showUnit="1" class="MultiMeter" sensorType="integer" normalDigitColor="0xff888888" sensorName="pcie.link.gen.current0" row="3" columnSpan="1" backgroundColor="0xffffffff" title="pcie.link.gen.current0" lowerLimitActive="0" upperLimit="0" rowSpan="1" unit="" upperLimitActive="0"/>
+ <display lowerLimit="0" column="3" mAlarmDigitColor="0xffff0000" hostName="nvidia-smi" showUnit="1" class="MultiMeter" sensorType="integer" normalDigitColor="0xff888888" sensorName="pcie.link.width.max0" row="3" columnSpan="1" backgroundColor="0xffffffff" title="pcie.link.width.max0" lowerLimitActive="0" upperLimit="0" rowSpan="1" unit="" upperLimitActive="0"/>
+ <display lowerLimit="0" column="4" mAlarmDigitColor="0xffff0000" hostName="nvidia-smi" showUnit="1" class="MultiMeter" sensorType="integer" normalDigitColor="0xff888888" sensorName="power.limit0" row="3" columnSpan="1" backgroundColor="0xffffffff" title="power.limit0" lowerLimitActive="0" upperLimit="0" rowSpan="1" unit="W" upperLimitActive="0"/>
+ <display lowerLimit="0" column="1" mAlarmDigitColor="0xffff0000" hostName="nvidia-smi" showUnit="1" class="MultiMeter" sensorType="integer" normalDigitColor="0xff888888" sensorName="pcie.link.gen.max0" row="3" columnSpan="1" backgroundColor="0xffffffff" title="pcie.link.gen.max0" lowerLimitActive="0" upperLimit="0" rowSpan="1" unit="" upperLimitActive="0"/>
+ <display lowerLimit="0" column="2" mAlarmDigitColor="0xffff0000" hostName="nvidia-smi" showUnit="1" class="MultiMeter" sensorType="integer" normalDigitColor="0xff888888" sensorName="pcie.link.width.current0" row="3" columnSpan="1" backgroundColor="0xffffffff" title="pcie.link.width.current0" lowerLimitActive="0" upperLimit="0" rowSpan="1" unit="" upperLimitActive="0"/>
+ <display column="0" showUnit="0" lowlimitactive="0" class="DancingBars" row="1" uplimit="0" columnSpan="1" lowlimit="0" backgroundColor="0xffffffff" title="clocks_throttle_reasons.applications_clocks_setting0" normalColor="0xff888888" alarmColor="0xffff0000" rowSpan="1" min="0" max="1" unit="" uplimitactive="0" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorDescr="clocks_throttle_reasons.applications_clocks_setting0" sensorName="clocks_throttle_reasons.applications_clocks_setting0"/>
+ </display>
+ <display column="1" showUnit="0" lowlimitactive="0" class="DancingBars" row="1" uplimit="0" columnSpan="1" lowlimit="0" backgroundColor="0xffffffff" title="clocks_throttle_reasons.gpu_idle0" normalColor="0xff888888" alarmColor="0xffff0000" rowSpan="1" min="0" max="1" unit="" uplimitactive="0" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorDescr="clocks_throttle_reasons.gpu_idle0" sensorName="clocks_throttle_reasons.gpu_idle0"/>
+ </display>
+ <display column="2" showUnit="0" lowlimitactive="0" class="DancingBars" row="1" uplimit="0" columnSpan="1" lowlimit="0" backgroundColor="0xffffffff" title="clocks_throttle_reasons.hw_slowdown0" normalColor="0xff888888" alarmColor="0xffff0000" rowSpan="1" min="0" max="1" unit="" uplimitactive="0" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorDescr="clocks_throttle_reasons.hw_slowdown0" sensorName="clocks_throttle_reasons.hw_slowdown0"/>
+ </display>
+ <display column="3" showUnit="0" lowlimitactive="0" class="DancingBars" row="1" uplimit="0" columnSpan="1" lowlimit="0" backgroundColor="0xffffffff" title="clocks_throttle_reasons.sw_power_cap0" normalColor="0xff888888" alarmColor="0xffff0000" rowSpan="1" min="0" max="1" unit="" uplimitactive="0" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorDescr="clocks_throttle_reasons.sw_power_cap0" sensorName="clocks_throttle_reasons.sw_power_cap0"/>
+ </display>
+ <display column="4" showUnit="0" lowlimitactive="0" class="DancingBars" row="1" uplimit="0" columnSpan="1" lowlimit="0" backgroundColor="0xffffffff" title="clocks_throttle_reasons.unknown0" normalColor="0xff888888" alarmColor="0xffff0000" rowSpan="1" min="0" max="1" unit="" uplimitactive="0" fontSize="8">
+  <beam hostName="nvidia-smi" sensorType="integer" sensorDescr="clocks_throttle_reasons.unknown0" sensorName="clocks_throttle_reasons.unknown0"/>
+ </display>
+</WorkSheet>

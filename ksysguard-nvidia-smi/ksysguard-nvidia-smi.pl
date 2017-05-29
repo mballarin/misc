@@ -1,10 +1,12 @@
 #!/usr/bin/perl
 
+use 5.010;
 use strict;
 use warnings;
 use utf8;
 use open qw( :encoding(UTF-8) :std );
-use List::Util qw(reduce);
+use List::Util qw(max);
+use IPC::Open2;
 
 =pod
 
@@ -13,14 +15,11 @@ use List::Util qw(reduce);
 =head1 DESCRIPTION
 
 A script that implements the KSysGuard protocol described at 
-https://techbase.kde.org/Development/Tutorials/Sensors and interfaces with 
+L<https://techbase.kde.org/Development/Tutorials/Sensors> and interfaces with 
 Nvidia's nvidia-smi tool
-(https://developer.nvidia.com/nvidia-system-management-interface).
+L<https://developer.nvidia.com/nvidia-system-management-interface>.
 
-It should support an arbitrary number of GPUs and provides the following 
-values:
-fan speed (%), temperature (°C), performance level, power usage (W),
-power_cap (W), memory usage (MiB), memory total (MiB), GPU utilization (%).
+It should support an arbitrary number of GPUs.
 
 By default, this script will fetch new data at most every two seconds. It is 
 possible, this needs to be increased, if many GPUs are installed.
@@ -29,22 +28,39 @@ possible, this needs to be increased, if many GPUs are installed.
 
 Save this script somewhere - let's assume /usr/local/bin.
 
-In KSysGuard, go to File->Monitor Remote Machine. Enter nvidia-smi as host, then 
-select "Custom command" as "Connection Type" and enter 
-"perl /usr/local/bin/ksysguard-nvidia-smi.pl" (without the quotation marks) as
-command. Replace /usr/local/bin with wherever you placed the script. 
+In KSysGuard, go to File->Monitor Remote Machine. Enter nvidia-smi (or something 
+else, but not localhost) as host, then  select "Custom command" as 
+"Connection Type" and enter "perl /usr/local/bin/ksysguard-nvidia-smi.pl" 
+(without the quotation marks) as command. Replace /usr/local/bin with wherever
+you placed the script. 
 
-Note that KSysGuard does not expand ~ to your home folder.
+Note that KSysGuard will not expand ~ to your home folder!
 
-=head1 ISSUES
+=head1 BUGS AND LIMITATIONS
 
-This script really doesn't care about error handling. I don't even know, If
-the KSysGuard protocol supports error reporting.
+I do not know how (or if) errors can be reported via the KSysGuard protocol.
 
-If it does not work, start by running the command indicated by $NVIDIA_SMI 
-below manually and check if this outputs at least one line like the following:
+If this does not work, try running the script manually in a shell.
+You should get the following prompt:
+    ksysguardd 1.2.0
+    ksysguardd>
 
-    |  0%   49C    P8    14W / 240W |    309MiB /  8110MiB |      0%      Default |
+Possible error: Syntax error. I tried to avoid features from "newer" Perl versions,
+but something might have slipped in. Try "perl -v" and check if your version is
+smaller than 5.14. If it is at leat 5.10 report a bug. Older versions are not
+supported.
+
+At the prompt, enter "monitors" and you should get the following:
+    ksysguardd> monitors
+    clocks.current.graphics0        integer
+    clocks.current.memory0  integer
+    clocks.current.sm0      integer
+    ...
+
+Possible error: ...failed: No such file or directory at 
+./ksysguard-nvidia-smi.pl line ...
+Check if nvidia-smi is really available at the location pounted to by 
+$NVIDIA_SMI below.
 
 =head1 LICENSE
 
@@ -70,73 +86,175 @@ SOFTWARE.
 
 =cut
 
-my $NVIDIA_SMI    = '/usr/bin/nvidia-smi';
 my $CACHE_SECONDS = 2;
+my $NVIDIA_SMI    = '/usr/bin/nvidia-smi';
+# as per KSysGuard's spec
+my $RE_INPUT      = qr/^ ([\w.]+?) (\d+) (\?)? $/x;
 
-# final field name will be 'name' with GPU ID appended, i.e. fan_speed0, fan_speed1, ...
-# 'max' is a coderef that will be called with a hashref of per-GPU data as argument
-my @FIELD_SPEC = (
-    {
-        name => 'fan_speed',
-        desc => 'Fan speed',
-        unit => '%',
-        re   => qr/.+?(\d+)%/x,
-        max  => sub { 100 }
+# the fields to be queried. At minimum, only the field name is added as key,
+# with an empty hash ref as value.
+# - If this hash ref contains no key, the unit will be determined
+# automatically, only default transformations will be applied and the maximum
+# will be set to the maximum of 100 or the current value.
+# - If transform points to a code ref, this code ref will be called with the
+# original value as parameter and its return value used as new value.
+# - If max points to a code ref, this code ref will be called with the
+# complete per-GPU data (Hashref) as argument, and the fields maximum will be
+# set to its return value.
+# - If max is a scalar, the fields maximum will be set to this value.
+# - If unit is a scalar, the auto-detected unit will be overriden by this value
+my %QUERIED_FIELDS = (
+    'clocks.current.graphics' => {
+        max => sub { $_[0]->{'clocks.max.graphics'} }
     },
-    {
-        name => 'temp',
-        desc => 'GPU temperature',
-        unit => '°C',
-        re   => qr/\s+(\d+)C/x,
-        max  => sub { 100 }
+    'clocks.current.memory' => {
+        max => sub {
+            $_[0]->{'clocks.max.memory'};
+          }
     },
-    {
-        name => 'perf_level',
-        desc => 'Performance level',
-        unit => '',
-        re   => qr/\s+P(\d+)/x,
-        max  => sub { 10 }
+    'clocks.current.sm' => {
+        max => sub {
+            $_[0]->{'clocks.max.sm'};
+          }
     },
-    {
-        name => 'pwr_usage',
-        desc => 'Power usage',
-        unit => 'W',
-        re   => qr/\s+(\d+)W/x,
-        max  => sub { $_[0]->{pwr_cap} }
+    'clocks.current.video' => {},
+    'clocks.max.graphics'  => {},
+    'clocks.max.memory'    => {},
+    'clocks.max.sm'        => {},
+    'clocks_throttle_reasons.applications_clocks_setting' =>
+      { max => 1, transform => \&map_bool },
+    'clocks_throttle_reasons.gpu_idle' =>
+      { max => 1, transform => \&map_bool },
+    'clocks_throttle_reasons.hw_slowdown' =>
+      { max => 1, transform => \&map_bool },
+    'clocks_throttle_reasons.sw_power_cap' =>
+      { max => 1, transform => \&map_bool },
+    'clocks_throttle_reasons.sync_boost' =>
+      { max => 1, transform => \&map_bool },
+    'clocks_throttle_reasons.unknown' =>
+      { max => 1, transform => \&map_bool },
+    'fan.speed'                       => {},
+    'memory.used'                     => {
+        max => sub {
+            $_[0]->{'memory.total'};
+          }
     },
-    {
-        name => 'pwr_cap',
-        desc => 'Power cap',
-        unit => 'W',
-        re   => qr/\s+\/\s+(\d+)W/x,
-        max  => sub { $_[0]->{pwr_cap} }
+    'memory.total'          => {},
+    'pcie.link.gen.current' => {
+        max => sub {
+            $_[0]->{'pcie.link.gen.max'};
+          }
     },
-    {
-        name => 'mem_usage',
-        desc => 'Memory usage',
-        unit => 'MiB',
-        re   => qr/.+?(\d+)MiB/x,
-        max  => sub { $_[0]->{mem_total} }
+    'pcie.link.gen.max'       => {},
+    'pcie.link.width.current' => {
+        max => sub {
+            $_[0]->{'pcie.link.width.max'};
+          }
     },
-    {
-        name => 'mem_total',
-        desc => 'Memory total',
-        unit => 'MiB',
-        re   => qr/.+?(\d+)MiB/x,
-        max  => sub { $_[0]->{mem_total} }
+    'pcie.link.width.max' => {},
+    'power.draw'          => {
+        max => sub {
+            $_[0]->{'power.limit'};
+          }
     },
-    {
-        name => 'util',
-        desc => 'Utilization',
-        unit => '%',
-        re   => qr/.+?(\d+)%/x,
-        max  => sub { 100 }
+    'power.limit' => {},
+    'pstate'      => {
+        max       => 12,
+        transform => sub {
+            my $s = shift;
+            $s =~ s/P(\d+)/$1/x;
+            return $s;
+          }
     },
+    'temperature.gpu' => { unit => '°C' },
+    'utilization.gpu' => {},
 );
 
-my %fields_by_name = map { ($_->{name}, $_) } @FIELD_SPEC;
-my $re_fields = reduce { qr/$a $b/x } map { $_->{re} } @FIELD_SPEC;
-my $re_input = qr/^(\w+?)(\d+)(\?)?$/x;
+sub trim {
+    my $string = shift;
+
+    $string =~ s/^\s+|\s+$//xg;
+    return $string;
+}
+
+# maps boolean values returned by nvidia-smi to something that is true
+# or false in Perl
+sub map_bool {
+    my ($string) = @_;
+
+    if ($string eq 'Active') {
+        return 1;
+    } elsif ($string eq 'Not Active') {
+        return 0;
+    } else {
+        die "Unexpected boolean input: '$string'\n";
+    }
+}
+
+sub remove_unit {
+    my ($string) = @_;
+
+    $string =~ s/(.+?)(?:\s+\S+)?/$1/xg;
+    return $string;
+}
+
+sub transform_value {
+    my ($value, $header) = @_;
+
+    $value = trim($value);
+    if (my $transform = $QUERIED_FIELDS{$header}->{transform}) {
+        $value = $transform->($value);
+    }
+    $value = remove_unit($value);
+    return $value;
+}
+
+sub collect_data_real {
+    my ($in, $out);
+    my $pid = open2($out, $in, $NVIDIA_SMI, '--format=csv',
+        '--query-gpu=' . join(',', keys %QUERIED_FIELDS));
+    waitpid($pid, 0);
+
+    # the following would be much saner and readable with CPAN modules
+    # (Text::CSV, List::MoreUtils). But I want to avoid non-core dependencies.
+    my (@gpus, @headers);
+    while (<$out>) {
+        chomp;
+        if (scalar @headers) {
+            my %gpu_data;
+            my @values = split /,/x, $_;
+            for my $i (0 .. $#headers) {
+                $gpu_data{ $headers[$i] } =
+                  transform_value($values[$i], $headers[$i]);
+            }
+            push @gpus, \%gpu_data;
+        } else {
+            for my $field (split /,/x, $_) {
+                if ($field =~ /^(.+?)(?:\[(.+)\])?$/x) {
+                    my $header = trim($1);
+                    $QUERIED_FIELDS{$header}->{unit} //= trim($2 // '');
+                    push @headers, $header;
+                } else {
+                    die "unparsable header: '$field'\n";
+                }
+            }
+        }
+    }
+    return @gpus;
+}
+
+{
+    my @data;
+    my $last_checked = 0;
+
+    sub collect_data {
+        if ($last_checked < time() - $CACHE_SECONDS) {
+            $last_checked = time();
+            @data         = collect_data_real();
+        }
+        return \@data;
+    }
+}
 
 sub print_monitors {
     my ($data) = @_;
@@ -157,9 +275,9 @@ sub print_field_on_gpu {
     if (my $gpu_data = $data->[$gpu_id]) {
         if ($do_meta) {
             printf("%s\t0\t%d\t%s\n",
-                $fields_by_name{$field_name}->{desc},
+                $field_name,
                 get_max($field_name, $gpu_data),
-                $fields_by_name{$field_name}->{unit},
+                $QUERIED_FIELDS{$field_name}->{unit},
             );
         } else {
             print "$gpu_data->{$field_name}\n";
@@ -171,30 +289,14 @@ sub print_field_on_gpu {
 sub get_max {
     my ($field_name, $gpu_data) = @_;
 
-    return $fields_by_name{$field_name}->{max}->($gpu_data);
-}
-
-# only fetch data, if existing data is older than $CACHE_SECONDS seconds
-{
-    my $cached_data;
-    my $last_checked = 0;
-
-    sub collect_data {
-        if ($last_checked < time() - $CACHE_SECONDS) {
-            my @gpu_data;
-            for my $line (split /\R/x, qx($NVIDIA_SMI)) {
-                my %per_gpu_data;
-                if (my @captures = $line =~ $re_fields) {
-                    @per_gpu_data{ map { $_->{name} } @FIELD_SPEC } = @captures;
-                    push @gpu_data, \%per_gpu_data;
-                }
-            }
-            $cached_data  = \@gpu_data;
-            $last_checked = time();
-            return \@gpu_data;
+    if (my $explicit = $QUERIED_FIELDS{$field_name}->{max}) {
+        if (ref $explicit eq 'CODE') {
+            return $explicit->($gpu_data);
         } else {
-            return $cached_data;
+            return $explicit;
         }
+    } else {
+        return max($gpu_data->{$field_name}, 100);
     }
 }
 
@@ -205,8 +307,10 @@ while (my $input = <STDIN>) {
     chomp $input;
     if ($input eq 'monitors') {
         print_monitors(collect_data());
-    } elsif (my ($field_name, $gpu_id, $do_meta) = $input =~ $re_input) {
+    } elsif (my ($field_name, $gpu_id, $do_meta) = $input =~ $RE_INPUT) {
         print_field_on_gpu(collect_data(), $field_name, $gpu_id, $do_meta);
+    } else {
+        die "Invalid input: '$input'\n";
     }
     print "ksysguardd> ";
 }
